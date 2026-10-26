@@ -1,7 +1,7 @@
 use std::process::Command;
 
 #[test]
-fn help_and_invalid_arguments_never_initialize_a_terminal() {
+fn help_and_invalid_arguments_never_open_a_window() {
     for option in ["--help", "-h", "--bogus"] {
         let output = Command::new(env!("CARGO_BIN_EXE_flappy-jack"))
             .arg(option)

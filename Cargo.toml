@@ -2,11 +2,14 @@
 name = "flappy-jack"
 version = "0.1.0"
 edition = "2024"
-description = "A candlelit, pumpkin-powered Halloween terminal game"
+description = "A candlelit, pumpkin-powered Halloween game built with Freya"
 license = "MIT"
 
 [dependencies]
-ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
+freya = { version = "=0.5.0-rc.13", features = ["engine"] }
+
+[profile.dev.package.flappy-jack]
+opt-level = 2
 
 [profile.release]
 lto = "thin"

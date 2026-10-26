@@ -1,7 +1,5 @@
-//! A hollow, carved implicit surface, ray-marched into square half-cell pixels.
-use ratatui::{buffer::Buffer, layout::Rect, style::Color};
+//! A hollow, carved implicit surface rendered into square RGBA pixels.
 
-pub(crate) const BACKGROUND: Color = Color::Rgb(8, 7, 15);
 const EYE_LEFT: &[(f32, f32)] = &[(-0.73, 0.14), (-0.20, 0.20), (-0.43, 0.55)];
 const EYE_RIGHT: &[(f32, f32)] = &[(0.20, 0.20), (0.73, 0.14), (0.43, 0.55)];
 const NOSE: &[(f32, f32)] = &[(-0.12, -0.09), (0.12, -0.09), (0.0, 0.12)];
@@ -146,15 +144,16 @@ fn trace(origin: V, ray: V) -> Option<(V, f32)> {
     None
 }
 
-fn rgb(r: f32, g: f32, b: f32) -> Color {
-    Color::Rgb(
-        r.clamp(0.0, 255.0) as u8,
-        g.clamp(0.0, 255.0) as u8,
-        b.clamp(0.0, 255.0) as u8,
-    )
+fn rgb(red: f32, green: f32, blue: f32) -> [u8; 4] {
+    [
+        red.clamp(0.0, 255.0) as u8,
+        green.clamp(0.0, 255.0) as u8,
+        blue.clamp(0.0, 255.0) as u8,
+        255,
+    ]
 }
 
-fn shade(p: V, ray: V, yaw: f32, seconds: f32) -> Color {
+fn shade(p: V, ray: V, yaw: f32, seconds: f32) -> [u8; 4] {
     let n = normal(p);
     let world_normal = n.yaw(yaw).pitch(0.13);
     let key = world_normal.dot(V(-0.48, 0.67, 0.57).unit()).max(0.0);
@@ -194,12 +193,9 @@ fn shade(p: V, ray: V, yaw: f32, seconds: f32) -> Color {
     )
 }
 
-/// Draw real rotating carved geometry. Each `▀` holds two approximately square RGB pixels.
-/// `area` is clipped to the buffer, including buffers whose origin is not (0, 0).
-pub fn render(buf: &mut Buffer, area: Rect, seconds: f32) {
-    let visible = area.intersection(buf.area);
-    if visible.is_empty() || area.is_empty() {
-        return;
+pub fn render(width: u16, height: u16, seconds: f32) -> Vec<u8> {
+    if width == 0 || height == 0 {
+        return Vec::new();
     }
     let seconds = if seconds.is_finite() {
         seconds.rem_euclid(1000.0)
@@ -207,13 +203,20 @@ pub fn render(buf: &mut Buffer, area: Rect, seconds: f32) {
         0.0
     };
     let yaw = 0.16 + seconds * 0.46;
-    let scale = (area.width as f32 / 2.9).min(area.height as f32 * 2.0 / 2.65);
+    let scale = (width as f32 / 2.9).min(height as f32 / 2.65);
     let origin = V(0.0, 0.08, 4.5).pitch(-0.13).yaw(-yaw);
+    let horizontal_axis = V(1.0, 0.0, 0.0).pitch(-0.13).yaw(-yaw);
+    let vertical_axis = V(0.0, 1.0, 0.0).pitch(-0.13).yaw(-yaw);
+    let forward_axis = V(0.0, 0.0, -4.0).pitch(-0.13).yaw(-yaw);
     let bob = (seconds * 1.2).sin() * 0.025;
     let pixel = |x: u16, y: u16| {
-        let sx = (x as f32 + 0.5 - area.width as f32 * 0.5) / scale;
-        let sy = (area.height as f32 - y as f32 - 0.5) / scale + 0.08 + bob;
-        let ray = V(sx, sy, -4.0).unit().pitch(-0.13).yaw(-yaw);
+        let sx = (x as f32 + 0.5 - width as f32 * 0.5) / scale;
+        let sy = (height as f32 * 0.5 - y as f32 - 0.5) / scale + 0.08 + bob;
+        let ray = horizontal_axis
+            .mul(sx)
+            .add(vertical_axis.mul(sy))
+            .add(forward_axis)
+            .unit();
         if let Some((p, _depth)) = trace(origin, ray) {
             return shade(p, ray, yaw, seconds);
         }
@@ -225,41 +228,36 @@ pub fn render(buf: &mut Buffer, area: Rect, seconds: f32) {
             15.0 + halo * 13.0 - shadow * 11.0,
         )
     };
-    for y in visible.y..visible.bottom() {
-        for x in visible.x..visible.right() {
-            let local_x = x - area.x;
-            let local_y = (y - area.y) * 2;
-            buf[(x, y)]
-                .set_symbol("▀")
-                .set_fg(pixel(local_x, local_y))
-                .set_bg(pixel(local_x, local_y + 1));
+    let mut pixels = Vec::with_capacity(usize::from(width) * usize::from(height) * 4);
+    for y in 0..height {
+        for x in 0..width {
+            pixels.extend_from_slice(&pixel(x, y));
         }
     }
+    pixels
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::pumpkin::{V, render, trace};
 
-    fn colored_pixels(buf: &Buffer, predicate: impl Fn(u8, u8, u8) -> bool) -> usize {
-        buf.content
-            .iter()
-            .flat_map(|cell| [cell.fg, cell.bg])
-            .filter(|color| matches!(color, Color::Rgb(r, g, b) if predicate(*r, *g, *b)))
+    fn colored_pixels(pixels: &[u8], predicate: impl Fn(u8, u8, u8) -> bool) -> usize {
+        pixels
+            .chunks_exact(4)
+            .filter(|pixel| predicate(pixel[0], pixel[1], pixel[2]))
             .count()
     }
 
     #[test]
     fn first_frame_has_orange_body_and_bright_carved_apertures() {
-        let mut buf = Buffer::empty(Rect::new(0, 0, 76, 19));
-        render(&mut buf, Rect::new(0, 0, 76, 19), 0.0);
+        let pixels = render(76, 38, 0.0);
         assert!(
-            colored_pixels(&buf, |r, g, b| r > 65
+            colored_pixels(&pixels, |r, g, b| r > 65
                 && u16::from(r) > u16::from(g) * 2
                 && b < 50)
                 > 300
         );
-        assert!(colored_pixels(&buf, |r, g, b| r > 170 && g > 110 && b < 100) > 35);
+        assert!(colored_pixels(&pixels, |r, g, b| r > 170 && g > 110 && b < 100) > 35);
     }
 
     #[test]
@@ -276,28 +274,24 @@ mod tests {
             (front_depth - back_depth).abs() > 0.2,
             "a cut reaches the inner back wall"
         );
-        let area = Rect::new(0, 0, 64, 18);
-        let mut front = Buffer::empty(area);
-        let mut turned = Buffer::empty(area);
-        render(&mut front, area, 0.0);
-        render(&mut turned, area, 2.5);
+        let front = render(64, 36, 0.0);
+        let turned = render(64, 36, 2.5);
         assert!(
             front
-                .content
                 .iter()
-                .zip(&turned.content)
-                .filter(|(a, b)| a != b)
+                .zip(&turned)
+                .filter(|(first, second)| first != second)
                 .count()
                 > 300
         );
     }
 
     #[test]
-    fn clips_to_offset_buffer_and_handles_empty_or_invalid_time() {
-        let mut buf = Buffer::empty(Rect::new(10, 20, 8, 5));
-        render(&mut buf, Rect::new(8, 18, 12, 9), f32::NAN);
-        assert!(buf.content.iter().all(|cell| cell.symbol() == "▀"));
-        render(&mut buf, Rect::new(0, 0, 0, 0), 0.0);
-        render(&mut buf, Rect::new(0, 0, 2, 2), 0.0);
+    fn handles_empty_dimensions_and_invalid_time() {
+        assert!(render(0, 0, 0.0).is_empty());
+        let pixels = render(12, 9, f32::NAN);
+        assert_eq!(pixels.len(), 12 * 9 * 4);
+        assert!(pixels.chunks_exact(4).all(|pixel| pixel[3] == 255));
+        assert_eq!(pixels, render(12, 9, 0.0));
     }
 }

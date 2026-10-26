@@ -1,7 +1,8 @@
 pub mod app;
 pub mod game;
 pub mod pumpkin;
+pub mod scene;
 pub mod storage;
-pub mod terminal;
 pub mod title;
 pub mod ui;
+pub mod window;
