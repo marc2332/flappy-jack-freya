@@ -2,6 +2,8 @@
 
 A Halloween-themed desktop game built with [Freya](https://freyaui.dev/) and Rust. Fly a pumpkin through cemetery gates, collect candy, and beat your best score.
 
+A fork of [aspnxdd/flappy-jack-ratatui](https://github.com/aspnxdd/flappy-jack-ratatui).
+
 ![Flappy Jack title screen](docs/screenshots/title.png)
 
 ![Flying through cemetery gates](docs/screenshots/gameplay.png)
