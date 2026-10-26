@@ -10,6 +10,14 @@ cargo run --release -- --demo
 
 A native desktop window replaces the original Ratatui interface. The window starts at 1100 × 700 and can be resized down to 700 × 520. Build requirements are those of [Freya](https://freyaui.dev/), including a current Rust toolchain and the platform libraries required by Skia and winit. Building fetches dependencies, playing needs no network connection.
 
+## Screenshots
+
+Captured from a live **100 × 30** truecolor terminal running `--demo`.
+
+![Title screen with a candlelit 3D jack-o’-lantern, moon, and ghosts](docs/screenshots/title.png)
+
+![Gameplay with Jack flying through cemetery gates and a score of 9](docs/screenshots/gameplay.png)
+
 ## Controls
 
 | Input | Action |
