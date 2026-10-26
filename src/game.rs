@@ -1,4 +1,4 @@
-//! Deterministic world simulation; the app owns the fixed 120 Hz accumulator.
+//! Deterministic world simulation driven by the app's fixed 120 Hz accumulator.
 
 pub const WIDTH: f32 = 100.0;
 pub const HEIGHT: f32 = 24.0;
@@ -175,7 +175,7 @@ impl Game {
     }
 
     fn collides(&self) -> bool {
-        // Touching is safe; only overlap of the small inner hitbox is lethal.
+        // Only overlap of the small inner hitbox is lethal, touching is safe.
         self.y < PLAYER_RADIUS
             || self.y > HEIGHT - PLAYER_RADIUS
             || self.gates.iter().any(|gate| {
@@ -227,7 +227,7 @@ impl Game {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::game::*;
 
     const DT: f32 = 1.0 / 120.0;
 

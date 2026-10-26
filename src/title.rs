@@ -23,6 +23,12 @@ impl Component for TitleScreen {
         let demo = app.demo;
         let seconds = app.seconds;
         let pumpkin = self.pumpkin.read().clone();
+        let mut app_state = self.app;
+        let retrying = self.result.is_some();
+        let record = match self.result {
+            Some(score) => format!("SCORE {score:03}    BEST {best:03}"),
+            None => format!("BEST {best:03}  ·  Gate +1  ·  Candy +3"),
+        };
         let height = Platform::get().current_window().root_size.read().height;
         let hero_size = (height * 0.42).clamp(130.0, 340.0);
         let background = RenderCallback::new(move |context| {
@@ -67,37 +73,19 @@ impl Component for TitleScreen {
                     .height(Size::px(hero_size))
                     .background(hero),
             )
-            .maybe(self.result.is_some(), |el| {
-                el.child(
-                    label()
-                        .text(format!(
-                            "SCORE {:03}    BEST {best:03}",
-                            self.result.unwrap_or(0)
-                        ))
-                        .font_size(22.0)
-                        .color(CREAM),
-                )
-            })
-            .maybe(self.result.is_none(), |el| {
-                el.child(
-                    label()
-                        .text(format!("BEST {best:03}  ·  Gate +1  ·  Candy +3"))
-                        .font_size(15.0)
-                        .color(MUTED),
-                )
-            })
+            .child(
+                label()
+                    .text(record)
+                    .font_size(if retrying { 22.0 } else { 15.0 })
+                    .color(if retrying { CREAM } else { MUTED }),
+            )
             .child(ActionButton {
-                text: if self.result.is_some() {
-                    "Fly again"
-                } else {
-                    "Awaken"
-                },
-                app: self.app,
-                action: Action::Activate,
+                text: if retrying { "Fly again" } else { "Awaken" },
+                on_activate: (move |()| app_state.write().action(Action::Activate)).into(),
             })
             .child(
                 label()
-                    .text(if self.result.is_some() {
+                    .text(if retrying {
                         "Space or R to retry"
                     } else {
                         "Press Space to awaken"

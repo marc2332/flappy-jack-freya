@@ -67,7 +67,9 @@ pub(crate) fn save(path: &Path, score: u32) -> io::Result<()> {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use super::*;
+    use std::{env, fs, path::PathBuf, sync::atomic::Ordering};
+
+    use crate::storage::{TEMP_ID, data_path, load, save};
 
     pub(crate) struct TestDir(pub PathBuf);
 

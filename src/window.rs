@@ -14,7 +14,7 @@ use crate::{
     app::{Action, App as GameApp, Phase},
     pumpkin,
     scene::NIGHT,
-    ui::GameView,
+    ui::{DEATH_BURST_DURATION, GameView},
 };
 
 const PUMPKIN_SIZE: u16 = 256;
@@ -43,12 +43,8 @@ impl PumpkinWorker {
         }
     }
 
-    fn latest_image(&self) -> Option<SkImage> {
-        let mut latest = None;
-        while let Ok(pixels) = self.frames.try_recv() {
-            latest = Some(pixels);
-        }
-        let pixels = latest?;
+    fn receive_image(&self) -> Option<SkImage> {
+        let pixels = self.frames.try_recv().ok()?;
         let dimensions = (i32::from(PUMPKIN_SIZE), i32::from(PUMPKIN_SIZE));
         let info = ImageInfo::new(dimensions, ColorType::RGBA8888, AlphaType::Opaque, None);
         images::raster_from_data(
@@ -89,9 +85,13 @@ impl App for GameWindow {
             let suspended = !focused || size.width <= 0.0 || size.height <= 0.0;
             if suspended {
                 held_keys.write().clear();
-                app.write().pause_for_focus_loss();
+                if app.peek().phase == Phase::Playing {
+                    app.write().pause_for_focus_loss();
+                }
             }
-            app.write().advance(Duration::ZERO, suspended);
+            if app.peek().suspended != suspended {
+                app.write().advance(Duration::ZERO, suspended);
+            }
         });
         use_future(move || {
             let worker = worker.clone();
@@ -107,20 +107,27 @@ impl App for GameWindow {
                     let size = *window.root_size.peek();
                     let suspended =
                         !*window.is_app_focused.peek() || size.width <= 0.0 || size.height <= 0.0;
-                    app.write().advance(elapsed, suspended);
-                    if let Some(image) = worker.latest_image() {
+                    let advancing = !suspended && app.peek().phase != Phase::Paused;
+                    if advancing || app.peek().suspended != suspended {
+                        app.write().advance(elapsed, suspended);
+                    }
+
+                    if let Some(image) = worker.receive_image() {
                         pumpkin.set(Some(image));
                     }
-                    let (phase, seconds, quit) = {
+                    let (render_pumpkin, seconds, quit) = {
                         let app = app.peek();
-                        (app.phase, app.seconds, app.quit)
+                        let render_pumpkin = app.phase == Phase::Title
+                            || (app.phase == Phase::GameOver
+                                && app.game.death_time >= DEATH_BURST_DURATION);
+                        (render_pumpkin, app.seconds, app.quit)
                     };
                     if quit {
                         Platform::get().exit();
                         break;
                     }
                     if !suspended {
-                        if matches!(phase, Phase::Title | Phase::GameOver) {
+                        if render_pumpkin {
                             let _ = worker.requests.try_send(seconds);
                         }
                         window.request_redraw();

@@ -121,7 +121,7 @@ fn normal(p: V) -> V {
 }
 
 fn trace(origin: V, ray: V) -> Option<(V, f32)> {
-    // A bounding sphere skips empty space; nearest-hit marching supplies actual depth.
+    // A bounding sphere skips empty space before nearest-hit marching.
     let b = origin.dot(ray);
     let discriminant = b * b - origin.dot(origin) + 1.42_f32.powi(2);
     if discriminant < 0.0 {
